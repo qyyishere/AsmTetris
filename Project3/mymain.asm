@@ -114,6 +114,8 @@ db "55555555555555555555"
 	score dq 0h
 	;bestscore dq 0h
 
+	;一个标志位
+	flag db 0
 .const
 szClassName db 'MyClass',0
 szCaptionMain db 'MyTetris',0
@@ -408,9 +410,66 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			.if fallLDelta==1
 				;左移，判断是否可以移动
 				xor esi,esi
-				mov esi,4
-				lea eax, fallDelta
-				add BYTE PTR [eax], -1
+				xor eax,eax
+
+				mov esi,1
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+				mov flag,0
+				.while esi<=4
+					;----------------
+					;碰到边界了吗
+					;----------------
+					;计算方块位置
+					xor eax,eax
+					mov ax,WORD PTR [ebx]
+					xor edx,edx
+					mov ecx,20
+					div ecx
+					;edx中存放余数，eax中存放商
+					.if edx==0
+						mov edx,20
+						sub eax,1
+					.endif
+
+					;如果碰到左边界
+					.if edx==1
+						mov flag,1
+					.endif
+
+					.break .if flag==1
+					add esi,1
+					add ebx,1
+				.endw
+
+				mov esi,1
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+				.if flag==0
+					.while esi<=4
+						;----------------
+						;和其他的块冲突吗
+						;----------------
+						mov eax,offset mapArray
+						add ax,WORD PTR [ebx]
+						sub eax,1
+						.if BYTE PTR [eax]!=48
+							mov flag,1
+						.endif
+
+						.break .if flag==1
+					
+
+						;计数器++ fallBlock指针++
+						add esi,1
+						add ebx,1
+					.endw
+				.endif
+				;如果没有越界的话允许操作
+				.if flag==0
+					lea eax, fallDelta
+					add BYTE PTR [eax], -1
+				.endif
 			.endif
 			.if fallRDelta==1
 				;右移，判断是否可以移动
