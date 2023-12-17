@@ -2,7 +2,6 @@
 .model flat,stdcall
 option casemap:none
 
-
 include windows.inc
 include gdi32.inc
 includelib gdi32.lib
@@ -10,7 +9,6 @@ include user32.inc
 includelib user32.lib
 include kernel32.inc
 includelib kernel32.lib
-include msvcrt.inc
 includelib msvcrt.lib
 
 .data
@@ -25,17 +23,7 @@ includelib msvcrt.lib
 	showEnd byte 'end',0
 	sPause db 'Pause',0
 	sEnd db 'End',0
-;若干方块
-;0,1,2,3,4,5,6
-block db 1,2,3,4 ;I
- db 2,22,42,41   ;J
- db 1,21,41,42   ;L
- db 1,2,21,22    ;O
- db 2,3,22,21    ;S
- db 1,2,3,22     ;T
- db 1,2,22,23    ;Z
-;用来选择方块的随机数
-rand dw 2
+
 	;41*20 的指示矩阵，第41行不供玩家使用
 	mapArray	db "00000000000000000000"
 db "00000000000000000000"
@@ -301,7 +289,9 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 		;----------------------
 		.if eax==1 
 			;invoke MessageBox,hWnd,offset sStart,offset sStart,MB_OK
-			.if procState!=1
+			xor eax,eax
+			mov al,procState
+			.if  eax != 1
 				;设置状态值
 				lea eax,offset procState
 				mov BYTE PTR [eax],1
@@ -314,42 +304,17 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				;如果当前没有falling的方块，创建方块
 				.if fallState==0
 					;方块的位置
-
-					;（伪）随机选择一种方块的类型，取模的结果在edx中
-					xor eax,eax
-					mov ax,rand
-					xor edx,edx
-					mov ecx,7
-					div ecx
-					add rand,5
-					.if rand > 2000
-						mov rand , 3
-					.endif
-
-					;eax中存放的是fallBLock的地址
 					xor eax,eax
 					lea eax,offset fallBlock
-
-					;ebx中存放的是block的地址
-					xor ebx,ebx
-					lea ebx,offset block
-					;加上增量
-					imul edx,edx,4
-					add ebx,edx
-					mov esi,1
-					xor ecx,ecx
-					.while esi<=4
-						mov cl,BYTE PTR [ebx]
-						mov WORD PTR [eax],cx
-						add eax,2
-						add ebx,1
-						add esi,1
-					.endw
-					;
+					mov WORD PTR [eax],4
+					add eax,2
+					mov WORD PTR [eax],5
+					add eax,2
+					mov WORD PTR [eax],24
+					add eax,2 
+					mov WORD PTR [eax],25
 					mov fallState,1
-
 					;方块的颜色
-					xor edx,edx
 					lea edx,fallColor
 					add BYTE PTR [edx],1
 					;49，50，51，52
@@ -358,14 +323,15 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					.endif
 				.endif 
 			.endif
-		.endif
 
 		;----------------------
 		;暂停按键
 		;----------------------
-		.if eax==2  
+		.elseif eax==2  
 			;invoke MessageBox,hWnd,offset sPause,offset sPause,MB_OK
-			.if procState==1
+			xor eax,eax
+			mov al,procState
+			.if eax==1
 				;设置状态值
 				lea eax,offset procState
 				mov BYTE PTR [eax],2
@@ -373,16 +339,17 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				;销毁计时器
 				invoke KillTimer,hWnd,1
 				;销毁计时器
-				invoke KillTimer, hWnd,1
+				invoke KillTimer, hWnd,2
 			.endif
-		.endif
 
 		;----------------------
 		;结束按键
 		;----------------------
-		.if eax==3 
+		.elseif eax==3 
 			;invoke MessageBox,hWnd,offset sEnd,offset sEnd,MB_OK
-			.if procState!=0
+			xor eax,eax
+			mov al,procState
+			.if eax!=0
 				;设置状态值
 				lea eax,offset procState
 				mov BYTE PTR [eax],0
@@ -405,75 +372,15 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;-----------------------------------------------------------
 			;把这一步要进行的移动结算一下
 
-			
+			lea eax, fallDelta
 			xor ebx,ebx
 			.if fallLDelta==1
 				;左移，判断是否可以移动
-				xor esi,esi
-				xor eax,eax
-
-				mov esi,1
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-				mov flag,0
-				.while esi<=4
-					;----------------
-					;碰到边界了吗
-					;----------------
-					;计算方块位置
-					xor eax,eax
-					mov ax,WORD PTR [ebx]
-					xor edx,edx
-					mov ecx,20
-					div ecx
-					;edx中存放余数，eax中存放商
-					.if edx==0
-						mov edx,20
-						sub eax,1
-					.endif
-
-					;如果碰到左边界
-					.if edx==1
-						mov flag,1
-					.endif
-
-					.break .if flag==1
-					add esi,1
-					add ebx,1
-				.endw
-
-				mov esi,1
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-				.if flag==0
-					.while esi<=4
-						;----------------
-						;和其他的块冲突吗
-						;----------------
-						mov eax,offset mapArray
-						add ax,WORD PTR [ebx]
-						sub eax,1
-						.if BYTE PTR [eax]!=48
-							mov flag,1
-						.endif
-
-						.break .if flag==1
-					
-
-						;计数器++ fallBlock指针++
-						add esi,1
-						add ebx,1
-					.endw
-				.endif
-				;如果没有越界的话允许操作
-				.if flag==0
-					lea eax, fallDelta
-					add BYTE PTR [eax], -1
-				.endif
+				
+				add BYTE PTR [eax], -1
 			.endif
 			.if fallRDelta==1
 				;右移，判断是否可以移动
-				lea eax, fallDelta
 				add BYTE PTR [eax], 1
 			.endif
 			.if fallDelta!=0
