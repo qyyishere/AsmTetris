@@ -23,7 +23,17 @@ includelib msvcrt.lib
 	showEnd byte 'end',0
 	sPause db 'Pause',0
 	sEnd db 'End',0
-
+;若干方块
+;0,1,2,3,4,5,6
+block db 1,2,3,4 ;I
+ db 2,22,42,41   ;J
+ db 1,21,41,42   ;L
+ db 1,2,21,22    ;O
+ db 2,3,22,21    ;S
+ db 1,2,3,22     ;T
+ db 1,2,22,23    ;Z
+;用来选择方块的随机数
+rand dw 2
 	;41*20 的指示矩阵，第41行不供玩家使用
 	mapArray	db "00000000000000000000"
 db "00000000000000000000"
@@ -102,8 +112,10 @@ db "55555555555555555555"
 	score dq 0h
 	;bestscore dq 0h
 
-	;一个标志位
+	;一个flag
 	flag db 0
+	;另一个flag
+	flag1 db 0
 .const
 szClassName db 'MyClass',0
 szCaptionMain db 'MyTetris',0
@@ -304,17 +316,41 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				;如果当前没有falling的方块，创建方块
 				.if fallState==0
 					;方块的位置
+
+					;（伪）随机选择一种方块的类型，取模的结果在edx中
+					xor eax,eax
+					mov ax,rand
+					xor edx,edx
+					mov ecx,7
+					div ecx
+					add rand,5
+					.if rand > 2000
+						mov rand , 3
+					.endif
+
+					;eax中存放的是fallBLock的地址
 					xor eax,eax
 					lea eax,offset fallBlock
-					mov WORD PTR [eax],4
-					add eax,2
-					mov WORD PTR [eax],5
-					add eax,2
-					mov WORD PTR [eax],24
-					add eax,2 
-					mov WORD PTR [eax],25
+
+					;ebx中存放的是block的地址
+					xor ebx,ebx
+					lea ebx,offset block
+					;加上增量
+					imul edx,edx,4
+					add ebx,edx
+					mov esi,1
+					xor ecx,ecx
+					.while esi<=4
+						mov cl,BYTE PTR [ebx]
+						mov WORD PTR [eax],cx
+						add eax,2
+						add ebx,1
+						add esi,1
+					.endw
+					;
 					mov fallState,1
 					;方块的颜色
+					xor edx,edx
 					lea edx,fallColor
 					add BYTE PTR [edx],1
 					;49，50，51，52
@@ -376,8 +412,88 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			xor ebx,ebx
 			.if fallLDelta==1
 				;左移，判断是否可以移动
-				
-				add BYTE PTR [eax], -1
+				xor esi,esi
+				xor eax,eax
+
+				mov esi,1
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+				mov flag,0
+				.while esi<=4
+					;----------------
+					;碰到边界了吗
+					;----------------
+					;计算方块位置
+					xor eax,eax
+					mov ax,WORD PTR [ebx]
+					xor edx,edx
+					mov ecx,20
+					div ecx
+					;edx中存放余数，eax中存放商
+					.if edx==0
+						mov edx,20
+						sub eax,1
+					.endif
+
+					;如果碰到左边界
+					.if edx==1
+						mov flag,1
+					.endif
+
+					.break .if flag==1
+					add esi,1
+					add ebx,2
+				.endw
+
+				mov esi,0
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+				.if flag==0
+					.while esi<4
+						;----------------
+						;和其他的块冲突吗
+						;----------------
+						imul ecx,esi,2
+						add ecx,ebx
+
+						;看看这个的左边是不是自己人
+						mov flag1,0
+						mov edi,0
+						.while edi<4
+							imul eax,edi,2
+							add eax,ebx
+							
+							mov ax,WORD PTR [eax]
+							add ax,1
+							.if ax==WORD PTR [ecx]
+								mov flag1,1
+							.endif
+							inc edi
+							
+						.endw
+
+						xor eax,eax
+						mov eax,offset mapArray
+						add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
+						sub eax,2
+						.if BYTE PTR [eax]!=48;这里异常退出
+							.if flag1==0
+								mov flag,1
+							.endif
+						.endif
+
+						.break .if flag==1
+					
+
+						;计数器++ 
+						add esi,1
+					.endw
+				.endif
+				;如果没有越界的话允许操作
+				.if flag==0
+					lea eax, fallDelta
+					add BYTE PTR [eax], -1
+				.endif
 			.endif
 			.if fallRDelta==1
 				;右移，判断是否可以移动
