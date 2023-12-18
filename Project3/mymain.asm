@@ -409,6 +409,9 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;把这一步要进行的移动结算一下
 
 			lea eax, fallDelta
+			.if fallDelta==20
+				
+			.endif
 			xor ebx,ebx
 			.if fallLDelta==1
 				;左移，判断是否可以移动
@@ -495,10 +498,93 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					add BYTE PTR [eax], -1
 				.endif
 			.endif
+			;--------------------------------左移判断结束
 			.if fallRDelta==1
 				;右移，判断是否可以移动
-				add BYTE PTR [eax], 1
+				xor esi,esi
+				xor eax,eax
+
+				mov esi,1
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+				mov flag,0
+				.while esi<=4
+					;----------------
+					;碰到边界了吗
+					;----------------
+					;计算方块位置
+					xor eax,eax
+					mov ax,WORD PTR [ebx]
+					xor edx,edx
+					mov ecx,20
+					div ecx
+					;edx中存放余数，eax中存放商
+					.if edx==0
+						mov edx,20
+						sub eax,1
+					.endif
+
+					;如果碰到左边界
+					.if edx==20
+						mov flag,1
+					.endif
+
+					.break .if flag==1
+					add esi,1
+					add ebx,2
+				.endw
+
+				mov esi,0
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+				.if flag==0
+					.while esi<4
+						;----------------
+						;和其他的块冲突吗
+						;----------------
+						imul ecx,esi,2
+						add ecx,ebx
+
+						;看看这个的右边是不是自己人
+						mov flag1,0
+						mov edi,0
+						.while edi<4
+							imul eax,edi,2
+							add eax,ebx
+							
+							mov ax,WORD PTR [eax]
+							sub ax,1
+							.if ax==WORD PTR [ecx]
+								mov flag1,1
+							.endif
+							inc edi
+							
+						.endw
+
+						xor eax,eax
+						mov eax,offset mapArray
+						add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
+						;sub eax,2
+						.if BYTE PTR [eax]!=48;这里异常退出
+							.if flag1==0
+								mov flag,1
+							.endif
+						.endif
+
+						.break .if flag==1
+					
+
+						;计数器++ 
+						add esi,1
+					.endw
+				.endif
+				;如果没有越界的话允许操作
+				.if flag==0
+					lea eax, fallDelta
+					add BYTE PTR [eax], 1
+				.endif
 			.endif
+			;-------------------------------------右移判断结束
 			.if fallDelta!=0
 				;修改mapArray
 				lea eax,offset mapArray
