@@ -347,7 +347,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						add ebx,1
 						add esi,1
 					.endw
-					;
+					;当前有正在下落的方块
 					mov fallState,1
 					;方块的颜色
 					xor edx,edx
@@ -408,13 +408,65 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;-----------------------------------------------------------
 			;把这一步要进行的移动结算一下
 
-			lea eax, fallDelta
+			;----------------------
+			;下移，判断是否可以移动
+			;----------------------
+			mov flag,0
 			.if fallDelta==20
-				
+				mov esi,0
+				;ebx: fallBlock 的指针
+				lea ebx,fallBlock
+
+				.while esi<4
+					;----------------
+					;和其他的块冲突吗
+					;----------------
+					imul ecx,esi,2
+					add ecx,ebx
+
+					;看看这个的下边是不是自己人
+					mov flag1,0
+					mov edi,0
+					.while edi<4
+						imul eax,edi,2
+						add eax,ebx
+							
+						mov ax,WORD PTR [eax]
+						sub ax ,20
+						.if ax==WORD PTR [ecx]
+							mov flag1,1
+						.endif
+						inc edi
+							
+					.endw
+
+					xor eax,eax
+					mov eax,offset mapArray
+					add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
+					add eax,19 ;19=20-1
+					.if BYTE PTR [eax]!=48;这里异常退出
+						.if flag1==0
+							mov flag,1
+						.endif
+					.endif
+
+					.break .if flag==1
+					
+					;计数器++ 
+					add esi,1
+				.endw
+				;已经触底了在这里拦住
+				.if flag==1
+					mov fallDelta,0
+					mov fallState,0
+				.endif
 			.endif
 			xor ebx,ebx
+			;----------------------
+			;左移，判断是否可以移动
+			;----------------------
 			.if fallLDelta==1
-				;左移，判断是否可以移动
+				
 				xor esi,esi
 				xor eax,eax
 
@@ -524,7 +576,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						sub eax,1
 					.endif
 
-					;如果碰到左边界
+					;如果碰到右边界
 					.if edx==20
 						mov flag,1
 					.endif
@@ -585,72 +637,74 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				.endif
 			.endif
 			;-------------------------------------右移判断结束
-			.if fallDelta!=0
-				;修改mapArray
-				lea eax,offset mapArray
-				lea ebx,offset fallBlock
-				mov esi,1
-				.while esi<=4
-					xor ecx,ecx
-					mov cx,WORD PTR [ebx]
-					add ecx,eax
-					dec ecx
+			.if fallState==1
+				.if fallDelta!=0
+					;修改mapArray
+					lea eax,offset mapArray
+					lea ebx,offset fallBlock
+					mov esi,1
+					.while esi<=4
+						xor ecx,ecx
+						mov cx,WORD PTR [ebx]
+						add ecx,eax
+						dec ecx
 
-					;将之前的位置设置为0
-					mov BYTE PTR [ecx],48
+						;将之前的位置设置为0
+						mov BYTE PTR [ecx],48
 
-					;esi增加
-					add esi,1
-					;ebx增加，fallBlock数组后移2(dw WORD)
-					add ebx,2
-				.endw
+						;esi增加
+						add esi,1
+						;ebx增加，fallBlock数组后移2(dw WORD)
+						add ebx,2
+					.endw
 
-				lea ebx,offset fallBlock
-				mov esi,1
-				.while esi<=4
-					xor ecx,ecx
-					mov cx, WORD PTR [ebx]
-					add ecx,eax
-					dec ecx
+					lea ebx,offset fallBlock
+					mov esi,1
+					.while esi<=4
+						xor ecx,ecx
+						mov cx, WORD PTR [ebx]
+						add ecx,eax
+						dec ecx
 
-					;将新的部分设置为1
-					xor edx,edx
-					mov dl,fallDelta
-					.if fallDelta==-1
-						mov edx,-1
-					.endif
-					add WORD PTR [ebx],dx
-					add ecx,edx
-					mov dl,fallColor
-					mov BYTE PTR [ecx],dl
+						;将新的部分设置为1
+						xor edx,edx
+						mov dl,fallDelta
+						.if fallDelta==-1
+							mov edx,-1
+						.endif
+						add WORD PTR [ebx],dx
+						add ecx,edx
+						mov dl,fallColor
+						mov BYTE PTR [ecx],dl
 
 	
 					
 
-					;esi增加
-					add esi,1
-					;ebx增加，fallBlock数组后移2(dw WORD)
-					add ebx,2
-				.endw
+						;esi增加
+						add esi,1
+						;ebx增加，fallBlock数组后移2(dw WORD)
+						add ebx,2
+					.endw
 
-				; 使部分区域无效
-				mov @stRect.left,110
-				mov @stRect.top,0
-				mov @stRect.right,500
-				mov @stRect.bottom,800
+					; 使部分区域无效
+					mov @stRect.left,110
+					mov @stRect.top,0
+					mov @stRect.right,500
+					mov @stRect.bottom,800
 
-				;三个操纵信号设置成0
-				lea eax,fallDelta
-				mov BYTE PTR [eax],0
+					;三个操纵信号设置成0
+					lea eax,fallDelta
+					mov BYTE PTR [eax],0
 
-				lea eax,fallLDelta
-				mov BYTE PTR [eax],0
+					lea eax,fallLDelta
+					mov BYTE PTR [eax],0
 
-				lea eax,fallRDelta
-				mov BYTE PTR [eax],0
+					lea eax,fallRDelta
+					mov BYTE PTR [eax],0
 
-				invoke InvalidateRect,hWnd,addr @stRect,TRUE
-				invoke UpdateWindow,hWnd
+					invoke InvalidateRect,hWnd,addr @stRect,TRUE
+					invoke UpdateWindow,hWnd
+				.endif
 			.endif
 		; 下落控制
 		.elseif eax==2
