@@ -94,12 +94,18 @@ db "55555555555555555555"
 			  dw 2
 			  dw 3
 			  dw 4
+	;四个部分的临时坐标	
+	fallBlockTemp dw 1
+			  dw 2
+			  dw 3
+			  dw 4
 	;记录方块的颜色49,50,51,52
 	fallColor db 49
 	;记录方块向三个方向移动
 	fallDelta db 0
 	fallLDelta db 0
 	fallRDelta db 0
+	accTric db 0
 	fallTurn db 0
 	;当前是0：清空的状态,1:正在掉落方块,2：暂停的状态
 	procState db 0
@@ -153,6 +159,20 @@ _GetPos proc C idc
 	.endif
 	ret
 _GetPos endp
+;-----------------
+;从一个小块的id获取在窗口中的x,y坐标（block右下角）
+;-----------------
+_GetWinPos proc C a,d
+	mov eax,a
+	mov edx,d
+	;根据行和列值计算屏幕坐标
+	imul eax, eax, 18;
+	imul edx, edx, 18; 
+	;起始坐标
+	add edx,125;屏幕x坐标
+	add eax, 50 ;屏幕y坐标
+	ret
+_GetWinPos endp
 ;-----------------
 ;翻转
 ;-----------------
@@ -284,30 +304,31 @@ _CreateBlock proc C
 	ret
 _CreateBlock endp
 ;-----------------------
-;碰撞检查，flag：1 下一步的移动会导致碰撞 ； edge:0 fall;1 left;20 right
+;碰撞检查，flag：1 下一步的移动会导致碰撞 ； edge:0 fall;1 left;20 right;-1 acc
 ;-----------------------
 _CheckLLimits proc C edge
-	xor esi,esi
-	xor eax,eax
-	mov esi,1
-	;ebx: fallBlock 的指针
-	lea ebx,fallBlock
 	mov flag,0
-	.while esi<=4
-		;----------------
-		;碰到边界了吗
-		;----------------
-		invoke _GetPos,word ptr [ebx]
-		;如果碰到左or右边界
-		.if edx==edge
-			mov flag,1
-		.endif
+	.if edge>0
+		xor esi,esi
+		xor eax,eax
+		mov esi,1
+		;ebx: fallBlock 的指针
+		lea ebx,fallBlock
+		.while esi<=4
+			;----------------
+			;碰到边界了吗
+			;----------------
+			invoke _GetPos,word ptr [ebx]
+			;如果碰到左or右边界
+			.if edx==edge
+				mov flag,1
+			.endif
 
-		.break .if flag==1
-		add esi,1
-		add ebx,2
-	.endw
-
+			.break .if flag==1
+			add esi,1
+			add ebx,2
+		.endw
+	.endif
 	mov esi,0
 	;ebx: fallBlock 的指针
 	lea ebx,fallBlock
@@ -333,6 +354,8 @@ _CheckLLimits proc C edge
 					sub ax,1
 				.elseif edge == 0
 					sub ax,20
+				.elseif edge == -1
+					sub ax,40
 				.endif
 				.if ax==WORD PTR [ecx]
 					mov flag1,1
@@ -348,6 +371,8 @@ _CheckLLimits proc C edge
 				sub eax,2
 			.elseif edge == 0
 				add eax,19
+			.elseif edge == -1
+				add eax,39
 			.endif
 			.if BYTE PTR [eax]!=48;这里异常退出
 				.if flag1==0
@@ -449,13 +474,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				.endif
 
 				invoke _GetPos,esi
-				;根据行和列值计算屏幕坐标
-				imul eax, eax, 18;
-				imul edx, edx, 18; 
-				;起始坐标
-				add edx,125;x坐标
-				add eax, 50 ;y坐标
-
+				invoke _GetWinPos,eax,edx
 				
 				push eax ;bottom
 				push edx ;right
@@ -503,7 +522,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				offset button,\
 				offset showStart,\
 				WS_CHILD or WS_VISIBLE,\
-				10,10,100,30,\  
+				10,10,80,30,\  
 				hWnd,1,hInstance,NULL  ;按钮ID：1
 		
 		;创建暂停Button
@@ -511,14 +530,14 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				offset button,\
 				offset showPause,\
 				WS_CHILD or WS_VISIBLE,\
-				10,80,100,30,\  
+				10,80,80,30,\  
 				hWnd,2,hInstance,NULL  ;按钮ID：2
 		;创建重开Button
 		invoke CreateWindowEx,NULL,\
 				offset button,\
 				offset showEnd,\
 				WS_CHILD or WS_VISIBLE,\
-				10,150,100,30,\  
+				10,150,80,30,\  
 				hWnd,3,hInstance,NULL  ;按钮ID：3
 	;----------------------
 	;处理命令
@@ -619,6 +638,18 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					mov fallDelta,0
 					mov fallState,0
 				.endif
+			.elseif fallDelta==40
+				invoke _CheckLLimits,-1
+				.if flag==1
+					invoke _CheckLLimits,0
+					.if flag==1
+						mov fallDelta,0
+						mov fallState,0
+					.else
+						mov fallDelta,20
+					.endif
+					
+				.endif
 			.endif
 			xor ebx,ebx
 			;----------------------
@@ -642,6 +673,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				.endif
 			.endif
 			;-------------------------------------右移判断结束
+			;如果当前右正在下落的block
 			.if fallState==1
 				.if fallDelta!=0
 					;修改mapArray
@@ -687,12 +719,18 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						;ebx增加，fallBlock数组后移2(dw WORD)
 						add ebx,2
 					.endw
-
+					invoke _GetPos,fallBlock
+					invoke _GetWinPos,eax,edx
+					add eax,72
+					add edx,72
 					; 使部分区域无效
-					mov @stRect.left,110
-					mov @stRect.top,0
-					mov @stRect.right,500
-					mov @stRect.bottom,800
+					mov @stRect.right,edx
+					mov @stRect.bottom,eax
+					sub eax,144
+					sub edx,144
+					mov @stRect.left,edx
+					mov @stRect.top,eax
+
 
 					;三个操纵信号设置成0
 					lea eax,fallDelta
@@ -711,6 +749,16 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				;消除检查
 				.while 1 
 					invoke _CheckRow
+					.if eax==1
+						;如果有可以消除的行，更新画面
+						;100,0,510,800
+						mov @stRect.right,505
+						mov @stRect.bottom,790
+						mov @stRect.left,105
+						mov @stRect.top,0
+						invoke InvalidateRect,hWnd,addr @stRect,TRUE
+						invoke UpdateWindow,hWnd
+					.endif
 					.break .if eax==0
 				.endw
 				;创建新的block
@@ -718,8 +766,12 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			.endif
 		; 下落控制
 		.elseif eax==2
-			lea eax,fallDelta
-			mov BYTE PTR [eax], 20
+			.if accTric == 0
+				mov fallDelta, 20
+			.else
+				mov fallDelta,40
+				mov accTric ,0
+			.endif
 		.endif
 	;----------------------------
 	;左右移动控制
@@ -744,7 +796,10 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				mov fallTurn,1
 			.endif
 			.endif
-		;.elseif wParam==042h ;按键B
+		.elseif wParam==042h ;按键B
+			.if procState==1
+				mov accTric,1
+			.endif
 			;在这里加速
 		.endif
 	.else  ;否则按默认处理方法处理消息
@@ -783,7 +838,7 @@ _WinMain proc  ;窗口程序
 	invoke CreateWindowEx,WS_EX_CLIENTEDGE,\  
 			offset szClassName,offset szCaptionMain,\ 
 			WS_OVERLAPPED or WS_CAPTION or WS_SYSMENU or WS_MINIMIZEBOX,\
-			100,100,1000,1000,\	
+			100,100,560,870,\	
 			NULL,NULL,hInstance,NULL
 			
 	mov hWinMain,eax 
