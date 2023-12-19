@@ -283,6 +283,85 @@ _CreateBlock proc C
 	.endif
 	ret
 _CreateBlock endp
+;-----------------------
+;碰撞检查，flag：1 下一步的移动会导致碰撞 ； edge:0 fall;1 left;20 right
+;-----------------------
+_CheckLLimits proc C edge
+	xor esi,esi
+	xor eax,eax
+	mov esi,1
+	;ebx: fallBlock 的指针
+	lea ebx,fallBlock
+	mov flag,0
+	.while esi<=4
+		;----------------
+		;碰到边界了吗
+		;----------------
+		invoke _GetPos,word ptr [ebx]
+		;如果碰到左or右边界
+		.if edx==edge
+			mov flag,1
+		.endif
+
+		.break .if flag==1
+		add esi,1
+		add ebx,2
+	.endw
+
+	mov esi,0
+	;ebx: fallBlock 的指针
+	lea ebx,fallBlock
+	.if flag==0
+		.while esi<4
+			;----------------
+			;和其他的块冲突吗
+			;----------------
+			imul ecx,esi,2
+			add ecx,ebx
+
+			;看看这个的左or右边是不是自己人
+			mov flag1,0
+			mov edi,0
+			.while edi<4
+				imul eax,edi,2
+				add eax,ebx
+							
+				mov ax,WORD PTR [eax]
+				.if edge == 1
+					add ax,1
+				.elseif edge == 20
+					sub ax,1
+				.elseif edge == 0
+					sub ax,20
+				.endif
+				.if ax==WORD PTR [ecx]
+					mov flag1,1
+				.endif
+				inc edi
+							
+			.endw
+
+			xor eax,eax
+			mov eax,offset mapArray
+			add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
+			.if edge == 1
+				sub eax,2
+			.elseif edge == 0
+				add eax,19
+			.endif
+			.if BYTE PTR [eax]!=48;这里异常退出
+				.if flag1==0
+					mov flag,1
+				.endif
+			.endif
+
+			.break .if flag==1
+			;计数器++ 
+			add esi,1
+		.endw
+	.endif
+	ret
+_CheckLLimits endp
 _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam  
 	
 
@@ -533,47 +612,8 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;----------------------
 			;下移，判断是否可以移动
 			;----------------------
-			mov flag,0
 			.if fallDelta==20
-				mov esi,0
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-
-				.while esi<4
-					;----------------
-					;和其他的块冲突吗
-					;----------------
-					imul ecx,esi,2
-					add ecx,ebx
-
-					;看看这个的下边是不是自己人
-					mov flag1,0
-					mov edi,0
-					.while edi<4
-						imul eax,edi,2
-						add eax,ebx
-						mov ax,WORD PTR [eax]
-						sub ax ,20
-						.if ax==WORD PTR [ecx]
-							mov flag1,1
-						.endif
-						inc edi
-					.endw
-
-					xor eax,eax
-					mov eax,offset mapArray
-					add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
-					add eax,19 ;19=20-1
-					.if BYTE PTR [eax]!=48;这里异常退出
-						.if flag1==0
-							mov flag,1
-						.endif
-					.endif
-
-					.break .if flag==1
-					;计数器++ 
-					add esi,1
-				.endw
+				invoke _CheckLLimits,0
 				;已经触底了在这里拦住
 				.if flag==1
 					mov fallDelta,0
@@ -585,70 +625,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;左移，判断是否可以移动
 			;----------------------
 			.if fallLDelta==1
-				
-				xor esi,esi
-				xor eax,eax
-				mov esi,1
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-				mov flag,0
-				.while esi<=4
-					;----------------
-					;碰到边界了吗
-					;----------------
-					invoke _GetPos,word ptr [ebx]
-					;如果碰到左边界
-					.if edx==1
-						mov flag,1
-					.endif
-
-					.break .if flag==1
-					add esi,1
-					add ebx,2
-				.endw
-
-				mov esi,0
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-				.if flag==0
-					.while esi<4
-						;----------------
-						;和其他的块冲突吗
-						;----------------
-						imul ecx,esi,2
-						add ecx,ebx
-
-						;看看这个的左边是不是自己人
-						mov flag1,0
-						mov edi,0
-						.while edi<4
-							imul eax,edi,2
-							add eax,ebx
-							
-							mov ax,WORD PTR [eax]
-							add ax,1
-							.if ax==WORD PTR [ecx]
-								mov flag1,1
-							.endif
-							inc edi
-							
-						.endw
-
-						xor eax,eax
-						mov eax,offset mapArray
-						add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
-						sub eax,2
-						.if BYTE PTR [eax]!=48;这里异常退出
-							.if flag1==0
-								mov flag,1
-							.endif
-						.endif
-
-						.break .if flag==1
-						;计数器++ 
-						add esi,1
-					.endw
-				.endif
+				invoke _CheckLLimits,1
 				;如果没有越界的话允许操作
 				.if flag==0
 					lea eax, fallDelta
@@ -657,75 +634,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			.endif
 			;--------------------------------左移判断结束
 			.if fallRDelta==1
-				;右移，判断是否可以移动
-				xor esi,esi
-				xor eax,eax
-
-				mov esi,1
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-				mov flag,0
-				.while esi<=4
-					;----------------
-					;碰到边界了吗
-					;----------------
-					;计算方块位置
-					invoke _GetPos,word ptr [ebx]
-
-					;如果碰到右边界
-					.if edx==20
-						mov flag,1
-					.endif
-
-					.break .if flag==1
-					add esi,1
-					add ebx,2
-				.endw
-
-				mov esi,0
-				;ebx: fallBlock 的指针
-				lea ebx,fallBlock
-				.if flag==0
-					.while esi<4
-						;----------------
-						;和其他的块冲突吗
-						;----------------
-						imul ecx,esi,2
-						add ecx,ebx
-
-						;看看这个的右边是不是自己人
-						mov flag1,0
-						mov edi,0
-						.while edi<4
-							imul eax,edi,2
-							add eax,ebx
-							
-							mov ax,WORD PTR [eax]
-							sub ax,1
-							.if ax==WORD PTR [ecx]
-								mov flag1,1
-							.endif
-							inc edi
-							
-						.endw
-
-						xor eax,eax
-						mov eax,offset mapArray
-						add ax,WORD PTR [ecx];ecx里面是当前的fallBlock
-						;sub eax,2
-						.if BYTE PTR [eax]!=48;这里异常退出
-							.if flag1==0
-								mov flag,1
-							.endif
-						.endif
-
-						.break .if flag==1
-					
-
-						;计数器++ 
-						add esi,1
-					.endw
-				.endif
+				invoke _CheckLLimits,20
 				;如果没有越界的话允许操作
 				.if flag==0
 					lea eax, fallDelta
