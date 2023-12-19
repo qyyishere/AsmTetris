@@ -74,7 +74,7 @@ db "00000000000000000000"
 db "00000000000000000000"
 db "00000000000000000000"
 db "00000000000000000000"
-db "00000000000000000000"
+db "00111111111111111111"
 db "55555555555555555555"
 	
 	;正在下降的方块
@@ -122,7 +122,110 @@ szCaptionMain db 'MyTetris',0
 szText db 'Win32 Assembly,Simple and powerful!',0
 
 .code
+;-----------------
+;消除
+;-----------------
 
+;-----------------
+;消除检查
+;-----------------
+_CheckRow proc C
+	mov esi,0
+	lea eax,mapArray 
+	.while esi<800
+		mov ebx,eax
+		add ebx,esi
+		mov edi,0
+		.while edi<20
+			.break.if BYTE PTR [ebx]==48
+			.if edi==19
+				;可以消除这一行
+					mov eax,esi
+					.while 1
+						mov ecx,ebx
+						sub ecx,20
+						xor edx,edx
+						mov dl,BYTE PTR [ecx]
+						mov BYTE PTR [ebx],dl
+						.break .if eax==20
+						sub eax,1
+						sub ebx,1
+					.endw
+				xor eax,eax
+				mov eax,1
+				ret 
+			.endif
+			add ebx,1
+			add edi,1
+		.endw
+		add esi,20
+	.endw
+	xor eax,eax
+	ret
+_CheckRow endp
+;-----------------
+;从一个小块的id获取x,y坐标
+;-----------------
+_GetPos proc C idc
+	xor eax,eax
+	mov eax,idc
+	xor edx,edx
+	mov ecx,20
+	div ecx
+	;edx中存放余数，eax中存放商
+	.if edx==0
+		mov edx,20
+		sub eax,1
+	.endif
+	ret
+_GetPos endp
+;-----------------
+;创建新的方块
+;-----------------
+_CreateBlock proc C 
+		;方块的位置
+	;（伪）随机选择一种方块的类型，取模的结果在edx中
+	xor eax,eax
+	mov ax,rand
+	xor edx,edx
+	mov ecx,7
+	div ecx
+	add rand,5
+	.if rand > 2000
+		mov rand , 3
+	.endif
+
+	;eax中存放的是fallBLock的地址
+	xor eax,eax
+	lea eax,offset fallBlock
+
+	;ebx中存放的是block的地址
+	xor ebx,ebx
+	lea ebx,offset block
+	;加上增量
+	imul edx,edx,4
+	add ebx,edx
+	mov esi,1
+	xor ecx,ecx
+	.while esi<=4
+		mov cl,BYTE PTR [ebx]
+		mov WORD PTR [eax],cx
+		add eax,2
+		add ebx,1
+		add esi,1
+	.endw
+	;当前有正在下落的方块
+	mov fallState,1
+	;方块的颜色
+	xor edx,edx
+	lea edx,fallColor
+	add BYTE PTR [edx],1
+	;49，50，51，52
+	.if BYTE PTR [edx] > 52
+		mov BYTE PTR [edx],49
+	.endif
+	ret
+_CreateBlock endp
 _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam  
 	
 
@@ -209,16 +312,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					invoke SelectObject,@hDc,@BrushE
 				.endif
 
-				;绘制方块,计算方块位置
-				mov eax,esi
-				xor edx,edx
-				mov ecx,20
-				div ecx
-				;edx中存放余数，eax中存放商
-				.if edx==0
-					mov edx,20
-					sub eax,1
-				.endif
+				invoke _GetPos,esi
 				;根据行和列值计算屏幕坐标
 				imul eax, eax, 18;
 				imul edx, edx, 18; 
@@ -315,48 +409,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 
 				;如果当前没有falling的方块，创建方块
 				.if fallState==0
-					;方块的位置
-
-					;（伪）随机选择一种方块的类型，取模的结果在edx中
-					xor eax,eax
-					mov ax,rand
-					xor edx,edx
-					mov ecx,7
-					div ecx
-					add rand,5
-					.if rand > 2000
-						mov rand , 3
-					.endif
-
-					;eax中存放的是fallBLock的地址
-					xor eax,eax
-					lea eax,offset fallBlock
-
-					;ebx中存放的是block的地址
-					xor ebx,ebx
-					lea ebx,offset block
-					;加上增量
-					imul edx,edx,4
-					add ebx,edx
-					mov esi,1
-					xor ecx,ecx
-					.while esi<=4
-						mov cl,BYTE PTR [ebx]
-						mov WORD PTR [eax],cx
-						add eax,2
-						add ebx,1
-						add esi,1
-					.endw
-					;当前有正在下落的方块
-					mov fallState,1
-					;方块的颜色
-					xor edx,edx
-					lea edx,fallColor
-					add BYTE PTR [edx],1
-					;49，50，51，52
-					.if BYTE PTR [edx] > 52
-						mov BYTE PTR [edx],49
-					.endif
+					invoke _CreateBlock
 				.endif 
 			.endif
 
@@ -430,14 +483,12 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					.while edi<4
 						imul eax,edi,2
 						add eax,ebx
-							
 						mov ax,WORD PTR [eax]
 						sub ax ,20
 						.if ax==WORD PTR [ecx]
 							mov flag1,1
 						.endif
 						inc edi
-							
 					.endw
 
 					xor eax,eax
@@ -451,7 +502,6 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					.endif
 
 					.break .if flag==1
-					
 					;计数器++ 
 					add esi,1
 				.endw
@@ -469,7 +519,6 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				
 				xor esi,esi
 				xor eax,eax
-
 				mov esi,1
 				;ebx: fallBlock 的指针
 				lea ebx,fallBlock
@@ -478,18 +527,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					;----------------
 					;碰到边界了吗
 					;----------------
-					;计算方块位置
-					xor eax,eax
-					mov ax,WORD PTR [ebx]
-					xor edx,edx
-					mov ecx,20
-					div ecx
-					;edx中存放余数，eax中存放商
-					.if edx==0
-						mov edx,20
-						sub eax,1
-					.endif
-
+					invoke _GetPos,word ptr [ebx]
 					;如果碰到左边界
 					.if edx==1
 						mov flag,1
@@ -538,8 +576,6 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						.endif
 
 						.break .if flag==1
-					
-
 						;计数器++ 
 						add esi,1
 					.endw
@@ -565,16 +601,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					;碰到边界了吗
 					;----------------
 					;计算方块位置
-					xor eax,eax
-					mov ax,WORD PTR [ebx]
-					xor edx,edx
-					mov ecx,20
-					div ecx
-					;edx中存放余数，eax中存放商
-					.if edx==0
-						mov edx,20
-						sub eax,1
-					.endif
+					invoke _GetPos,word ptr [ebx]
 
 					;如果碰到右边界
 					.if edx==20
@@ -677,9 +704,6 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						mov dl,fallColor
 						mov BYTE PTR [ecx],dl
 
-	
-					
-
 						;esi增加
 						add esi,1
 						;ebx增加，fallBlock数组后移2(dw WORD)
@@ -705,12 +729,19 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					invoke InvalidateRect,hWnd,addr @stRect,TRUE
 					invoke UpdateWindow,hWnd
 				.endif
+			.elseif fallState==0
+				;消除检查
+				.while 1 
+					invoke _CheckRow
+					.break .if eax==0
+				.endw
+				;创建新的block
+				invoke _CreateBlock
 			.endif
 		; 下落控制
 		.elseif eax==2
 			lea eax,fallDelta
 			mov BYTE PTR [eax], 20
-
 		.endif
 	;----------------------------
 	;左右移动控制
