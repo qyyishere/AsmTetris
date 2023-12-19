@@ -25,16 +25,18 @@ includelib msvcrt.lib
 	sEnd db 'End',0
 ;若干方块
 ;0,1,2,3,4,5,6
-block db 1,2,3,4 ;I
- db 2,22,42,41   ;J
- db 1,21,41,42   ;L
- db 1,2,21,22    ;O
+block db 2,1,3,4 ;I
+ db 22,2,42,41   ;J
+ db 21,1,41,42   ;L
+ db 2,1,21,22    ;O
  db 2,3,22,21    ;S
- db 1,2,3,22     ;T
- db 1,2,22,23    ;Z
+ db 2,1,3,22     ;T
+ db 2,1,22,23    ;Z
 ;用来选择方块的随机数
 rand dw 2
 	;41*20 的指示矩阵，第41行不供玩家使用
+	;id是从1开始的
+
 	mapArray	db "00000000000000000000"
 db "00000000000000000000"
 db "00000000000000000000"
@@ -87,7 +89,7 @@ db "55555555555555555555"
 		;如果此时是左右移动，限制移动
 		;如果此时是向下移动，终止，生成新的方块
 
-	;四个部分的坐标	;依次是一个图形中的最上、最下、最左、最右
+	;四个部分的坐标	
 	fallBlock dw 1
 			  dw 2
 			  dw 3
@@ -98,9 +100,7 @@ db "55555555555555555555"
 	fallDelta db 0
 	fallLDelta db 0
 	fallRDelta db 0
-
-	fallLDeltaTri db 0
-	fallRDeltaTri db 0
+	fallTurn db 0
 	;当前是0：清空的状态,1:正在掉落方块,2：暂停的状态
 	procState db 0
 
@@ -116,6 +116,10 @@ db "55555555555555555555"
 	flag db 0
 	;另一个flag
 	flag1 db 0
+
+	;翻转用到的临时变量
+	tempx dw ?
+	tempy dw ?
 .const
 szClassName db 'MyClass',0
 szCaptionMain db 'MyTetris',0
@@ -123,9 +127,77 @@ szText db 'Win32 Assembly,Simple and powerful!',0
 
 .code
 ;-----------------
-;消除
+;修改mapArray
 ;-----------------
+_SetMap proc C idc,val
+	lea eax,mapArray
+	add eax,idc
+	dec eax
+	mov ecx,val
+	mov byte ptr [eax],cl
+	ret
+_SetMap endp
+;-----------------
+;从一个小块的id获取x,y坐标
+;-----------------
+_GetPos proc C idc
+	xor eax,eax
+	mov eax,idc
+	xor edx,edx
+	mov ecx,20
+	div ecx
+	;edx中存放余数，eax中存放商
+	.if edx==0
+		mov edx,20
+		sub eax,1
+	.endif
+	ret
+_GetPos endp
+;-----------------
+;翻转
+;-----------------
+_TurnTetris proc C
+	lea ebx, fallBlock
+	invoke _GetPos,fallBlock
+	mov tempx,ax
+	mov tempy,dx
+	mov esi,1
+	add ebx,2
+	.while esi<4
+		;先把mapArray中旧的清零
+		invoke _SetMap,word ptr [ebx],48
+		mov ax ,word ptr [ebx]
+		invoke _GetPos,ax
+		sub ax,tempx
+		sub dx,tempy
 
+		.if ax >= 0
+			.if dx >= 0
+				imul ax,ax,-1
+			.elseif dx < 0
+				imul dx,dx,-1
+			.endif
+		.elseif ax < 0
+			.if dx >= 0
+				imul dx,dx,-1
+			.elseif dx < 0
+				imul ax,ax,-1
+			.endif
+		.endif
+		add ax,tempy
+		add dx,tempx
+		imul dx,dx,20
+		add ax,dx
+		;ax中是新的id
+		mov WORD PTR [ebx],ax
+		;把mapArray中新的置为Color
+		invoke _SetMap,word ptr [ebx],fallColor
+		;这里还没有进行碰撞检测
+		add ebx,2
+		inc esi
+	.endw
+	ret 
+_TurnTetris endp
 ;-----------------
 ;消除检查
 ;-----------------
@@ -163,22 +235,7 @@ _CheckRow proc C
 	xor eax,eax
 	ret
 _CheckRow endp
-;-----------------
-;从一个小块的id获取x,y坐标
-;-----------------
-_GetPos proc C idc
-	xor eax,eax
-	mov eax,idc
-	xor edx,edx
-	mov ecx,20
-	div ecx
-	;edx中存放余数，eax中存放商
-	.if edx==0
-		mov edx,20
-		sub eax,1
-	.endif
-	ret
-_GetPos endp
+
 ;-----------------
 ;创建新的方块
 ;-----------------
@@ -369,6 +426,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				WS_CHILD or WS_VISIBLE,\
 				10,10,100,30,\  
 				hWnd,1,hInstance,NULL  ;按钮ID：1
+		
 		;创建暂停Button
 		invoke CreateWindowEx,NULL,\
 				offset button,\
@@ -411,6 +469,8 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				.if fallState==0
 					invoke _CreateBlock
 				.endif 
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
 			.endif
 
 		;----------------------
@@ -429,6 +489,8 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				invoke KillTimer,hWnd,1
 				;销毁计时器
 				invoke KillTimer, hWnd,2
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
 			.endif
 
 		;----------------------
@@ -447,6 +509,8 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				invoke KillTimer, hWnd,1
 				;销毁计时器
 				invoke KillTimer, hWnd,2
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
 			.endif
 		.endif
 	;----------------------
@@ -459,6 +523,11 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;-----------------------------------------------------------
 			;在这里要更新mapArray,并且使窗口中要修改的部分无效(更新画面)
 			;-----------------------------------------------------------
+			;先旋转一下
+			.if fallTurn==1
+				invoke _TurnTetris
+				mov fallTurn ,0
+			.endif
 			;把这一步要进行的移动结算一下
 
 			;----------------------
@@ -758,6 +827,17 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				lea eax, fallRDelta
 				mov BYTE PTR [eax], 1	
 			.endif
+	.elseif eax==WM_KEYDOWN
+		.if wParam==041h ;按键A
+			;在这里旋转
+			.if procState==1
+			.if fallTurn==0
+				mov fallTurn,1
+			.endif
+			.endif
+		;.elseif wParam==042h ;按键B
+			;在这里加速
+		.endif
 	.else  ;否则按默认处理方法处理消息
 		invoke DefWindowProc,hWnd,uMsg,wParam,lParam
 		ret
