@@ -542,7 +542,7 @@ _StartButton proc C hWnd;主窗口句柄
 		;创建计时器，每XX秒下落
 		invoke SetTimer,hWnd,2,ax,NULL
 		mov ax,fallTime
-		add ax,5
+		add ax,20
 		;创建计时器，用于更新画面 
 		invoke SetTimer,hWnd,1,ax,NULL
 		
@@ -609,7 +609,7 @@ _EndButton proc C hWnd,endState
 				mov @stRect.right,510
 				mov @stRect.top,0
 				mov @stRect.bottom,800
-				invoke InvalidateRect,hWnd,addr @stRect,TRUE
+				invoke InvalidateRect,hWnd,addr @stRect,FALSE
 				invoke UpdateWindow,hWnd
 			.endif
 		.elseif endState==0
@@ -911,7 +911,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			mov @stRect.bottom,790
 			mov @stRect.left,5
 			mov @stRect.top,0
-			invoke InvalidateRect,hWnd,addr @stRect,TRUE
+			invoke InvalidateRect,hWnd,addr @stRect,FALSE
 			invoke UpdateWindow,hWnd
 		;----------------------
 		;暂停按键
@@ -1008,7 +1008,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					mov @newRect.top,eax
 					; 使部分区域无效
 					invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
-					invoke InvalidateRect,hWnd,addr @stRect,TRUE
+					invoke InvalidateRect,hWnd,addr @stRect,FALSE
 					invoke UpdateWindow,hWnd
 				.endif
 			.elseif fallDelta==40
@@ -1039,7 +1039,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						mov @newRect.top,eax
 						; 使部分区域无效
 						invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
-						invoke InvalidateRect,hWnd,addr @stRect,TRUE
+						invoke InvalidateRect,hWnd,addr @stRect,FALSE
 						invoke UpdateWindow,hWnd
 					.endif
 					
@@ -1084,7 +1084,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					mov @newRect.top,eax
 					; 使部分区域无效
 					invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
-					invoke InvalidateRect,hWnd,addr @stRect,TRUE
+					invoke InvalidateRect,hWnd,addr @stRect,FALSE
 					invoke UpdateWindow,hWnd
 
 					;三个操纵信号设置成0
@@ -1104,7 +1104,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						mov @stRect.bottom,790
 						mov @stRect.left,5
 						mov @stRect.top,0
-						invoke InvalidateRect,hWnd,addr @stRect,TRUE
+						invoke InvalidateRect,hWnd,addr @stRect,FALSE
 						invoke UpdateWindow,hWnd
 					.endif
 					.break .if eax==0
