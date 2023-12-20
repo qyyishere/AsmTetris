@@ -132,6 +132,11 @@ db "55555555555555555555"
 	rtTop dw ?
 	rtBottom dw ?
 	rtRight dw ?
+	;下落间隔
+	fallTime dw 240
+	fallHigher dw 120
+	fallHigh dw 240
+	fallLow dw 500
 .const
 szClassName db 'MyClass',0
 szCaptionMain db 'MyTetris',0
@@ -143,6 +148,9 @@ szNoteQ db "Q:加速",0
 szNoteE db "E:旋转",0
 szScore db "SCORE:",0
 szBestScore db "BEST SCORE:",0
+showQuick db "Higher",0
+showMid db "High",0
+showSlow db "Low",0
 .code
 ;-----------------
 ;int转换str
@@ -380,7 +388,7 @@ _CheckRow proc C
 	ret
 _CheckRow endp
 ;-----------------
-;随机数生成
+;随机数生成 结果在edx
 ;-----------------
 _CreateRandom proc C x
 	local @sysTime:SYSTEMTIME
@@ -518,6 +526,7 @@ _CheckLLimits proc C edge
 	.endif
 	ret
 _CheckLLimits endp
+
 ;-------------------
 ;开始和继续
 ;-------------------
@@ -529,11 +538,15 @@ _StartButton proc C hWnd;主窗口句柄
 		.endif
 		;设置状态值
 		mov procState,1
-
-		;创建计时器，用于更新画面 
-		invoke SetTimer,hWnd,1,245,NULL
+		mov ax,fallTime
 		;创建计时器，每XX秒下落
-		invoke SetTimer,hWnd,2,240,NULL
+		invoke SetTimer,hWnd,2,ax,NULL
+		mov ax,fallTime
+		add ax,5
+		;创建计时器，用于更新画面 
+		invoke SetTimer,hWnd,1,ax,NULL
+		
+
 
 		;如果当前没有falling的方块，创建方块
 		.if fallState==0
@@ -553,7 +566,7 @@ _StartButton endp
 	.while esi<4
 		imul eax,esi,2
 		add eax,ebx
-		.if word ptr [eax] < 41
+		.if word ptr [eax] < 61
 			mov eax,01h
 			ret
 		.endif
@@ -618,6 +631,56 @@ _EndButton proc C hWnd,endState
 	.endif
 	ret
 _EndButton endp
+;----------------
+;移动block
+;----------------
+_MoveBlock proc C
+;修改mapArray
+	lea eax,offset mapArray
+	lea ebx,offset fallBlock
+	mov esi,1
+	.while esi<=4
+		xor ecx,ecx
+		mov cx,WORD PTR [ebx]
+		add ecx,eax
+		dec ecx
+
+		;将之前的位置设置为0
+		mov BYTE PTR [ecx],48
+
+		;esi增加
+		add esi,1
+		;ebx增加，fallBlock数组后移2(dw WORD)
+		add ebx,2
+	.endw
+
+	lea ebx,offset fallBlock
+	mov esi,1
+	.while esi<=4
+		xor ecx,ecx
+		mov cx, WORD PTR [ebx]
+		add ecx,eax
+		dec ecx
+
+		;将新的部分设置为1
+		xor edx,edx
+		mov dl,fallDelta
+		.if fallDelta==-1
+			mov edx,-1
+		.endif
+		;修改fallBlock
+		add WORD PTR [ebx],dx
+		add ecx,edx
+		mov dl,fallColor
+		mov BYTE PTR [ecx],dl
+
+		;esi增加
+		add esi,1
+		;ebx增加，fallBlock数组后移2(dw WORD)
+		add ebx,2
+	.endw
+	ret
+_MoveBlock endp
 _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam  
 	
 
@@ -679,26 +742,27 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 		;绘制背景
 		;-----------------------
 		invoke Rectangle,@hDc,100,0,510,800
-
+		invoke SelectObject,@hDc,@BrushE
+		invoke Rectangle,@hDc,100,88,510,90
 		mov @stRect.left,5
 		mov @stRect.right,100
 
-		mov @stRect.top,300
-		mov @stRect.bottom,330
+		mov @stRect.top,360
+		mov @stRect.bottom,390
 		invoke DrawText,@hDc,addr szScore,-1,addr @stRect,DT_LEFT
 
 		invoke _int2str,score,addr sScore
-		mov @stRect.top,330
-		mov @stRect.bottom,360
+		mov @stRect.top,390
+		mov @stRect.bottom,420
 		invoke DrawText,@hDc,addr sScore,-1,addr @stRect,DT_LEFT
 
-		mov @stRect.top,360
-		mov @stRect.bottom,390
+		mov @stRect.top,420
+		mov @stRect.bottom,450
 		invoke DrawText,@hDc,addr szBestScore,-1,addr @stRect,DT_LEFT
 
 		invoke _int2str,bestscore,addr sBestScore
-		mov @stRect.top,390
-		mov @stRect.bottom,420
+		mov @stRect.top,450
+		mov @stRect.bottom,480
 		invoke DrawText,@hDc,addr sBestScore,-1,addr @stRect,DT_LEFT
 
 
@@ -800,15 +864,36 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				offset button,\
 				offset showPause,\
 				WS_CHILD or WS_VISIBLE,\
-				10,80,80,30,\  
+				10,60,80,30,\  
 				hWnd,2,hInstance,NULL  ;按钮ID：2
 		;创建重开Button
 		invoke CreateWindowEx,NULL,\
 				offset button,\
 				offset showEnd,\
 				WS_CHILD or WS_VISIBLE,\
-				10,150,80,30,\  
+				10,110,80,30,\  
 				hWnd,3,hInstance,NULL  ;按钮ID：3
+		;创建Button
+		invoke CreateWindowEx,NULL,\
+				offset button,\
+				offset showQuick,\
+				WS_CHILD or WS_VISIBLE or BS_AUTORADIOBUTTON,\
+				10,190,80,30,\  
+				hWnd,4,hInstance,NULL  ;按钮ID：4
+		;创建Button
+		invoke CreateWindowEx,NULL,\
+				offset button,\
+				offset showMid,\
+				WS_CHILD or WS_VISIBLE or BS_AUTORADIOBUTTON,\
+				10,240,80,30,\  
+				hWnd,5,hInstance,NULL  ;按钮ID：5
+		;创建Button
+		invoke CreateWindowEx,NULL,\
+				offset button,\
+				offset showSlow,\
+				WS_CHILD or WS_VISIBLE or BS_AUTORADIOBUTTON,\
+				10,290,80,30,\  
+				hWnd,6,hInstance,NULL  ;按钮ID：6
 	;----------------------
 	;处理命令
 	;----------------------
@@ -850,6 +935,22 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 		;----------------------
 		.elseif eax==3 
 			invoke _EndButton,hWnd,1
+		;速度控制
+		.elseif eax==4
+			mov ax,fallHigher
+			mov fallTime,ax
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
+		.elseif eax==5
+			mov ax,fallHigh
+			mov fallTime,ax
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
+		.elseif eax==6
+			mov ax,fallLow
+			mov fallTime,ax
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
 		.endif
 	;----------------------
 	;处理定时任务
@@ -891,6 +992,24 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					.if eax==1
 						invoke _EndButton,hWnd,0
 					.endif
+				.elseif flag==0
+					invoke _MoveBlock
+					mov fallDelta,0
+					;计算移动或者变换之后block占据的新区域
+					invoke _GetWinRect
+					xor eax,eax
+					mov ax,rtRight
+					mov @newRect.right,eax
+					mov ax,rtBottom
+					mov @newRect.bottom,eax
+					mov ax, rtLeft
+					mov @newRect.left,eax
+					mov ax,rtTop
+					mov @newRect.top,eax
+					; 使部分区域无效
+					invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
+					invoke InvalidateRect,hWnd,addr @stRect,TRUE
+					invoke UpdateWindow,hWnd
 				.endif
 			.elseif fallDelta==40
 				invoke _CheckLLimits,-1
@@ -899,8 +1018,29 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 					.if flag==1
 						mov fallDelta,0
 						mov fallState,0
+						invoke _CheckEnd
+						.if eax==1
+							invoke _EndButton,hWnd,0
+						.endif
 					.else
 						mov fallDelta,20
+						invoke _MoveBlock
+						mov fallDelta,0
+						;计算移动或者变换之后block占据的新区域
+						invoke _GetWinRect
+						xor eax,eax
+						mov ax,rtRight
+						mov @newRect.right,eax
+						mov ax,rtBottom
+						mov @newRect.bottom,eax
+						mov ax, rtLeft
+						mov @newRect.left,eax
+						mov ax,rtTop
+						mov @newRect.top,eax
+						; 使部分区域无效
+						invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
+						invoke InvalidateRect,hWnd,addr @stRect,TRUE
+						invoke UpdateWindow,hWnd
 					.endif
 					
 				.endif
@@ -927,52 +1067,10 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				.endif
 			.endif
 			;-------------------------------------右移判断结束
-			;如果当前右正在下落的block
+			;如果当前有正在下落的block
 			.if fallState==1
 				.if fallDelta!=0
-					;修改mapArray
-					lea eax,offset mapArray
-					lea ebx,offset fallBlock
-					mov esi,1
-					.while esi<=4
-						xor ecx,ecx
-						mov cx,WORD PTR [ebx]
-						add ecx,eax
-						dec ecx
-
-						;将之前的位置设置为0
-						mov BYTE PTR [ecx],48
-
-						;esi增加
-						add esi,1
-						;ebx增加，fallBlock数组后移2(dw WORD)
-						add ebx,2
-					.endw
-
-					lea ebx,offset fallBlock
-					mov esi,1
-					.while esi<=4
-						xor ecx,ecx
-						mov cx, WORD PTR [ebx]
-						add ecx,eax
-						dec ecx
-
-						;将新的部分设置为1
-						xor edx,edx
-						mov dl,fallDelta
-						.if fallDelta==-1
-							mov edx,-1
-						.endif
-						add WORD PTR [ebx],dx
-						add ecx,edx
-						mov dl,fallColor
-						mov BYTE PTR [ecx],dl
-
-						;esi增加
-						add esi,1
-						;ebx增加，fallBlock数组后移2(dw WORD)
-						add ebx,2
-					.endw
+					invoke _MoveBlock
 					;计算移动或者变换之后block占据的新区域
 					invoke _GetWinRect
 					xor eax,eax
