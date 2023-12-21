@@ -137,6 +137,7 @@ db "55555555555555555555"
 	fallHigher dw 120
 	fallHigh dw 240
 	fallLow dw 500
+	level dw 400
 .const
 szClassName db 'MyClass',0
 szCaptionMain db 'MyTetris',0
@@ -148,6 +149,8 @@ szNoteQ db "Q:加速",0
 szNoteE db "E:旋转",0
 szScore db "SCORE:",0
 szBestScore db "BEST SCORE:",0
+szVol db "下落速度：",0
+szLevel db "初始水位：",0
 showQuick db "Higher",0
 showMid db "High",0
 showSlow db "Low",0
@@ -529,10 +532,13 @@ _CheckLLimits endp
 ;随机地图
 ;------------------
 _InitMap proc C 
+	xor eax,eax
+	mov ax,level
+	mov esi,eax
 	invoke _CreateRandom,14
 	xor eax,eax
 	mov ax,dx
-	mov esi,400
+
 	lea ebx,mapArray
 	mov ecx,5
 	.while esi<800
@@ -780,39 +786,47 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 		mov @stRect.left,5
 		mov @stRect.right,100
 
-		mov @stRect.top,360
-		mov @stRect.bottom,390
+		mov @stRect.top,160
+		mov @stRect.bottom,190
+		invoke DrawText,@hDc,addr szVol,-1,addr @stRect,DT_LEFT
+
+		mov @stRect.top,350
+		mov @stRect.bottom,380
+		invoke DrawText,@hDc,addr szLevel,-1,addr @stRect,DT_LEFT
+
+		mov @stRect.top,540
+		mov @stRect.bottom,570
 		invoke DrawText,@hDc,addr szScore,-1,addr @stRect,DT_LEFT
 
 		invoke _int2str,score,addr sScore
-		mov @stRect.top,390
-		mov @stRect.bottom,420
+		mov @stRect.top,570
+		mov @stRect.bottom,600
 		invoke DrawText,@hDc,addr sScore,-1,addr @stRect,DT_LEFT
 
-		mov @stRect.top,420
-		mov @stRect.bottom,450
+		mov @stRect.top,600
+		mov @stRect.bottom,630
 		invoke DrawText,@hDc,addr szBestScore,-1,addr @stRect,DT_LEFT
 
 		invoke _int2str,bestscore,addr sBestScore
-		mov @stRect.top,450
-		mov @stRect.bottom,480
+		mov @stRect.top,630
+		mov @stRect.bottom,660
 		invoke DrawText,@hDc,addr sBestScore,-1,addr @stRect,DT_LEFT
 
 
-		mov @stRect.top,560
-		mov @stRect.bottom,590
+		mov @stRect.top,680
+		mov @stRect.bottom,710
 		invoke DrawText,@hDc,addr szNoteA,-1,addr @stRect,DT_LEFT
 
-		mov @stRect.top,590
-		mov @stRect.bottom,620
+		mov @stRect.top,710
+		mov @stRect.bottom,740
 		invoke DrawText,@hDc,addr szNoteD,-1,addr @stRect,DT_LEFT
 
-		mov @stRect.top,620
-		mov @stRect.bottom,650
+		mov @stRect.top,740
+		mov @stRect.bottom,770
 		invoke DrawText,@hDc,addr szNoteQ,-1,addr @stRect,DT_LEFT
 
-		mov @stRect.top,650
-		mov @stRect.bottom,680
+		mov @stRect.top,770
+		mov @stRect.bottom,800
 		invoke DrawText,@hDc,addr szNoteE,-1,addr @stRect,DT_LEFT
 		;----------------------
 		;绘制MapArray
@@ -828,7 +842,9 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			.if BYTE PTR [ebx]!=48
 
 				;选择笔刷
-				.if BYTE PTR [ebx]==49
+				.if BYTE PTR [ebx]==48
+					invoke SelectObject,@hDc,@oldBrush
+				.elseif BYTE PTR [ebx]==49
 					invoke SelectObject,@hDc,@BrushA
 				.elseif BYTE PTR [ebx]==50
 					invoke SelectObject,@hDc,@BrushB
@@ -927,6 +943,27 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 				WS_CHILD or WS_VISIBLE or BS_AUTORADIOBUTTON,\
 				10,290,80,30,\  
 				hWnd,6,hInstance,NULL  ;按钮ID：6
+		;创建Button
+		invoke CreateWindowEx,NULL,\
+				offset button,\
+				offset showQuick,\
+				WS_CHILD or WS_VISIBLE or BS_AUTOCHECKBOX,\
+				10,380,80,30,\  
+				hWnd,7,hInstance,NULL  ;按钮ID：7
+		;创建Button
+		invoke CreateWindowEx,NULL,\
+				offset button,\
+				offset showMid,\
+				WS_CHILD or WS_VISIBLE or BS_AUTOCHECKBOX,\
+				10,430,80,30,\  
+				hWnd,8,hInstance,NULL  ;按钮ID：8
+		;创建Button
+		invoke CreateWindowEx,NULL,\
+				offset button,\
+				offset showSlow,\
+				WS_CHILD or WS_VISIBLE or BS_AUTOCHECKBOX,\
+				10,480,80,30,\  
+				hWnd,9,hInstance,NULL  ;按钮ID：9
 	;----------------------
 	;处理命令
 	;----------------------
@@ -984,6 +1021,25 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			mov fallTime,ax
 				;把焦点从Button交还主窗口
 				invoke SetFocus,hWnd
+		.elseif eax==7
+			mov level,200
+
+				invoke CheckDlgButton,hWnd,8,BST_UNCHECKED
+				invoke CheckDlgButton,hWnd,9,BST_UNCHECKED
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
+		.elseif eax==8
+			mov level,400
+				invoke CheckDlgButton,hWnd,7,BST_UNCHECKED
+				invoke CheckDlgButton,hWnd,9,BST_UNCHECKED
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
+		.elseif eax==9
+			mov level,600
+				invoke CheckDlgButton,hWnd,7,BST_UNCHECKED
+				invoke CheckDlgButton,hWnd,8,BST_UNCHECKED
+				;把焦点从Button交还主窗口
+				invoke SetFocus,hWnd
 		.endif
 	;----------------------
 	;处理定时任务
@@ -1009,6 +1065,8 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			.if fallTurn==1
 				invoke _TurnTetris
 				mov fallTurn ,0
+				;计算移动或者变换之后block占据的新区域
+				invoke _GetWinRect
 			.endif
 			;把这一步要进行的移动结算一下
 
