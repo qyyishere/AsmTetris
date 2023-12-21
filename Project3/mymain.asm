@@ -317,10 +317,10 @@ _TurnTetris proc C
 			mov flag,1
 		.endif
 		invoke _GetPos,bx
-		.if edx==1
+		.if edx<3
 			mov flag1,1
 		.endif
-		.if edx==20
+		.if edx>18
 			mov flag2,1
 		.endif
 		add esi,1
@@ -543,6 +543,9 @@ _StartButton proc C hWnd;主窗口句柄
 		invoke SetTimer,hWnd,2,ax,NULL
 		mov ax,fallTime
 		add ax,20
+		.if fallTime >400
+			mov ax,200
+		.endif
 		;创建计时器，用于更新画面 
 		invoke SetTimer,hWnd,1,ax,NULL
 		
