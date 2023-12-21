@@ -261,7 +261,19 @@ _GetWinRect endp
 ;-----------------
 ;翻转
 ;-----------------
-_TurnTetris proc C
+_TurnTetris proc C hWnd
+	local @oldRect:RECT
+	local @newRect:RECT
+	invoke _GetWinRect
+	xor eax,eax
+	mov ax,rtRight
+	mov @oldRect.right,eax
+	mov ax,rtBottom
+	mov @oldRect.bottom,eax
+	mov ax, rtLeft
+	mov @oldRect.left,eax
+	mov ax,rtTop
+	mov @oldRect.top,eax
 	invoke _GetPos,fallBlock
 	mov tempx,ax
 	mov tempy,dx
@@ -348,6 +360,22 @@ _TurnTetris proc C
 			mov word ptr [ebx],dx
 			inc esi
 		.endw
+			;计算移动或者变换之后block占据的新区域
+			invoke _GetWinRect
+			xor eax,eax
+			mov ax,rtRight
+			mov @newRect.right,eax
+			mov ax,rtBottom
+			mov @newRect.bottom,eax
+			mov ax, rtLeft
+			mov @newRect.left,eax
+			mov ax,rtTop
+			mov @newRect.top,eax
+			; 使部分区域无效
+			;invoke UnionRect,addr @oldRect,addr @oldRect,addr @newRect
+			invoke InvalidateRect,hWnd,addr @oldRect,FALSE
+			invoke InvalidateRect,hWnd,addr @newRect,FALSE
+			invoke UpdateWindow,hWnd
 	.endif
 	ret 
 _TurnTetris endp
@@ -673,7 +701,19 @@ _EndButton endp
 ;----------------
 ;移动block
 ;----------------
-_MoveBlock proc C
+_MoveBlock proc C hWnd
+	local @oldRect:RECT
+	local @newRect:RECT
+	invoke _GetWinRect
+	xor eax,eax
+	mov ax,rtRight
+	mov @oldRect.right,eax
+	mov ax,rtBottom
+	mov @oldRect.bottom,eax
+	mov ax, rtLeft
+	mov @oldRect.left,eax
+	mov ax,rtTop
+	mov @oldRect.top,eax
 ;修改mapArray
 	lea eax,offset mapArray
 	lea ebx,offset fallBlock
@@ -718,6 +758,24 @@ _MoveBlock proc C
 		;ebx增加，fallBlock数组后移2(dw WORD)
 		add ebx,2
 	.endw
+
+	mov fallDelta,0
+	;计算移动或者变换之后block占据的新区域
+	invoke _GetWinRect
+	xor eax,eax
+	mov ax,rtRight
+	mov @newRect.right,eax
+	mov ax,rtBottom
+	mov @newRect.bottom,eax
+	mov ax, rtLeft
+	mov @newRect.left,eax
+	mov ax,rtTop
+	mov @newRect.top,eax
+	; 使部分区域无效
+	;invoke UnionRect,addr @oldRect,addr @oldRect,addr @newRect
+	invoke InvalidateRect,hWnd,addr @oldRect,FALSE
+invoke InvalidateRect,hWnd,addr @newRect,FALSE
+	invoke UpdateWindow,hWnd
 	ret
 _MoveBlock endp
 _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam  
@@ -725,8 +783,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 
 	local @stPs:PAINTSTRUCT
 	local @stRect:RECT
-	local @oldRect:RECT
-	local @newRect:RECT
+
 	local @hDc:HDC
 	local @hBrush:HBRUSH
 	local @BrushA:HBRUSH
@@ -1051,22 +1108,11 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;-----------------------------------------------------------
 			;在这里要更新mapArray,并且使窗口中要修改的部分无效(更新画面)
 			;-----------------------------------------------------------
-			invoke _GetWinRect
-			xor eax,eax
-			mov ax,rtRight
-			mov @oldRect.right,eax
-			mov ax,rtBottom
-			mov @oldRect.bottom,eax
-			mov ax, rtLeft
-			mov @oldRect.left,eax
-			mov ax,rtTop
-			mov @oldRect.top,eax
 			;先旋转一下
 			.if fallTurn==1
-				invoke _TurnTetris
+				invoke _TurnTetris,hWnd
 				mov fallTurn ,0
-				;计算移动或者变换之后block占据的新区域
-				invoke _GetWinRect
+
 			.endif
 			;把这一步要进行的移动结算一下
 
@@ -1084,23 +1130,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						invoke _EndButton,hWnd,0
 					.endif
 				.elseif flag==0
-					invoke _MoveBlock
-					mov fallDelta,0
-					;计算移动或者变换之后block占据的新区域
-					invoke _GetWinRect
-					xor eax,eax
-					mov ax,rtRight
-					mov @newRect.right,eax
-					mov ax,rtBottom
-					mov @newRect.bottom,eax
-					mov ax, rtLeft
-					mov @newRect.left,eax
-					mov ax,rtTop
-					mov @newRect.top,eax
-					; 使部分区域无效
-					invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
-					invoke InvalidateRect,hWnd,addr @stRect,FALSE
-					invoke UpdateWindow,hWnd
+					invoke _MoveBlock,hWnd
 				.endif
 			.elseif fallDelta==40
 				invoke _CheckLLimits,-1
@@ -1115,23 +1145,8 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 						.endif
 					.else
 						mov fallDelta,20
-						invoke _MoveBlock
+						invoke _MoveBlock,hWnd
 						mov fallDelta,0
-						;计算移动或者变换之后block占据的新区域
-						invoke _GetWinRect
-						xor eax,eax
-						mov ax,rtRight
-						mov @newRect.right,eax
-						mov ax,rtBottom
-						mov @newRect.bottom,eax
-						mov ax, rtLeft
-						mov @newRect.left,eax
-						mov ax,rtTop
-						mov @newRect.top,eax
-						; 使部分区域无效
-						invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
-						invoke InvalidateRect,hWnd,addr @stRect,FALSE
-						invoke UpdateWindow,hWnd
 					.endif
 					
 				.endif
@@ -1161,22 +1176,7 @@ _ProcWinMain proc uses ebx edi esi,hWnd,uMsg,wParam,lParam
 			;如果当前有正在下落的block
 			.if fallState==1
 				.if fallDelta!=0
-					invoke _MoveBlock
-					;计算移动或者变换之后block占据的新区域
-					invoke _GetWinRect
-					xor eax,eax
-					mov ax,rtRight
-					mov @newRect.right,eax
-					mov ax,rtBottom
-					mov @newRect.bottom,eax
-					mov ax, rtLeft
-					mov @newRect.left,eax
-					mov ax,rtTop
-					mov @newRect.top,eax
-					; 使部分区域无效
-					invoke UnionRect,addr @stRect,addr @oldRect,addr @newRect
-					invoke InvalidateRect,hWnd,addr @stRect,FALSE
-					invoke UpdateWindow,hWnd
+					invoke _MoveBlock,hWnd
 
 					;三个操纵信号设置成0
 					mov fallDelta,0
