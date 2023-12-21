@@ -391,9 +391,7 @@ _CheckRow endp
 ;随机数生成 结果在edx
 ;-----------------
 _CreateRandom proc C x
-	local @sysTime:SYSTEMTIME
-	invoke GetSystemTime, addr @sysTime
-	mov ax,@sysTime.wMilliseconds
+	invoke GetTickCount
 	xor edx,edx
 	mov ecx,x
 	div ecx
@@ -527,6 +525,37 @@ _CheckLLimits proc C edge
 	ret
 _CheckLLimits endp
 
+;------------------
+;随机地图
+;------------------
+_InitMap proc C 
+	invoke _CreateRandom,14
+	xor eax,eax
+	mov ax,dx
+	mov esi,400
+	lea ebx,mapArray
+	mov ecx,5
+	.while esi<800
+		mov ax,dx
+		add eax,esi
+		xor edx,edx
+		mov ecx,33
+		div ecx
+		mov eax,edx
+		xor edx,edx
+		mov ecx,5
+		div ecx
+		.if dl==al
+			mov dx,0
+		.endif
+		add dx,48
+		lea ebx,mapArray
+		add ebx,esi
+		mov byte ptr [ebx],dl
+		inc esi
+	.endw
+	ret
+_InitMap endp
 ;-------------------
 ;开始和继续
 ;-------------------
@@ -535,6 +564,7 @@ _StartButton proc C hWnd;主窗口句柄
 	.if  procState != 1
 		.if procState==0
 			mov score,0
+			invoke _InitMap
 		.endif
 		;设置状态值
 		mov procState,1
