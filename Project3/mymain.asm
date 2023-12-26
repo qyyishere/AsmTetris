@@ -20,7 +20,7 @@ includelib msvcrt.lib
 	showStart byte 'start',0
 	showPause byte 'pause',0
 	showEnd byte 'end',0
-	sEnd db 'MyTetris',0
+	sEnd db 'AsmTetris',0
 	sScore db '000000',0
 	sBestScore db '000000',0
 ;Èô¸É·½¿é

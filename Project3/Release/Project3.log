@@ -1,4 +1,4 @@
 ﻿  Assembling mymain.asm...
   LINK : 已指定 /LTCG，但不需要生成代码；从链接命令行中移除 /LTCG 以提高链接器性能
-  Project3.vcxproj -> C:\Users\DELL\source\repos\Project3\Release\Project3.exe
-  Project3.vcxproj -> C:\Users\DELL\source\repos\Project3\Release\Project3.pdb (Full PDB)
+  Project3.vcxproj -> C:\Users\DELL\source\repos\AsmTetris\Release\Project3.exe
+  Project3.vcxproj -> C:\Users\DELL\source\repos\AsmTetris\Release\Project3.pdb (Full PDB)
